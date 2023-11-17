@@ -4,23 +4,12 @@ import React, { useState } from 'react'
 
 const inter = Inter({ subsets: ['latin'] })
 
-async function generateHash(rawPasswd: string, salt: Uint8Array): Promise<string> {
+async function generateHash(rawPasswd: string, salt: string): Promise<string> {
     const encoder = new TextEncoder
-    const passwdArray = encoder.encode(rawPasswd)
+    const digest = await crypto.subtle.digest('SHA-1', encoder.encode(rawPasswd + salt))
+    const digestString = String.fromCharCode(...new Uint8Array(digest))
 
-    const passwdMerged = new Uint8Array(passwdArray.length + salt.length)
-    passwdMerged.set(passwdArray)
-    passwdMerged.set(salt, passwdArray.length)
-
-    const digest = await crypto.subtle.digest('SHA-1', passwdMerged)
-    const digestUint8Array = new Uint8Array(digest)
-    const hashedArray = new Uint8Array(digestUint8Array.length + salt.length)
-    hashedArray.set(digestUint8Array)
-    hashedArray.set(salt, digestUint8Array.length)
-
-    const digestString = String.fromCharCode(...hashedArray)
-
-    return `\${SSHA}${btoa(digestString)}`
+    return `{SSHA}${btoa(digestString + salt)}`
 }
 
 export default function Home() {
@@ -45,8 +34,12 @@ export default function Home() {
                     const raw = e.target.value
                     setRawPasswd(raw)
                     if(raw) {
-                        const salt = new Uint8Array(32)
-                        crypto.getRandomValues(salt)
+                        const saltArray = new Uint8Array(31)
+                        crypto.getRandomValues(saltArray)
+                        const salt = [...saltArray].map((c: number) => {
+                            const candidateChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./'
+                            return candidateChars[c % candidateChars.length]
+                        }).join('')
                         const hash = await generateHash(raw, salt)
                         setPasswdHash(hash)
                     } else {
